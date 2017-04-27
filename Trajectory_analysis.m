@@ -22,10 +22,10 @@ T_total             = [];
 % Data Points
 
 for i = 1:12
-    expanded_array_t = linspace(t_simple(i),t_simple(i+1),100);
-    expanded_array_T = linspace(T_simple(i),T_simple(i+1),100);
-    t_total = cat(2,t_total,expanded_array_t);
-    T_total = cat(2,T_total,expanded_array_T);
+    expanded_array_t    = linspace(t_simple(i),t_simple(i+1),100);
+    expanded_array_T    = linspace(T_simple(i),T_simple(i+1),100);
+    t_total             = cat(2,t_total,expanded_array_t);
+    T_total             = cat(2,T_total,expanded_array_T);
 end
 
 flight_angle        = 10;                                   % [deg]
@@ -51,14 +51,11 @@ end
 
 
 burn_length         = length(t_total);                      % [vec_length]
-
 a                   = linspace(0,0,burn_length);
 u                   = linspace(0,0,burn_length);
 h                   = linspace(0,0,burn_length);
-
 Af                  = pi*(.0450/2)^2;                       % [m^s]
 theta               = deg2rad(5);                           % [rad]
-
 ge                  = 9.81;                                 % [m/s]
 h                   = linspace(0,0,burn_length);            % [m]
 g                   = linspace(0,0,burn_length);            % [m/s^2]
@@ -84,7 +81,6 @@ for index = 1:(burn_length-1)
 end
 dt                  = dt_avg/burn_length;                   % [s] New Time step from average thrust dt. 
 
-
 for index = burn_length:10000000
     total_mass(index)= total_mass(index-1);
     
@@ -96,17 +92,31 @@ for index = burn_length:10000000
     rho(index+1)    = real(1.2*exp(-2.9*10^-5*h(index+1)^1.15));
     D(index+1)      = 0.5*rho(index+1)*u(index+1)^2*CD*Af; 
     t_total(index+1)= t_total(index)+dt; 
-    if u(index+1) < 0
+    if u(index+1) < 0 || t_total(index) >= 7
         index = index+1; 
         break;
     end
 end 
 
 CD                  = 1.50;                                  % Will be determined from drop tests with parachute. 
-Af                  = pi*(0.50/2)^2;                        % [m^2]
-
+Af                  = pi*(0.50/2)^2;                        % [m^2]r
 D(index)            = 0.5*rho(index)*u(index)^2*CD*Af; 
 
+
+for index = index:100000000
+    total_mass(index)= total_mass(index-1);
+    
+    u(index+1)      = u(index) + (-D(index)/total_mass(index)*dt ...
+                                - g(index)*dt);
+    h(index+1)      = h(index) + u(index)*dt*cos(theta);
+    g(index+1)      = ge*(Re/(Re+h(index+1)));
+    rho(index+1)    = real(1.2*exp(-2.9*10^-5*h(index+1)^1.15));
+    D(index+1)      = 0.5*rho(index+1)*u(index+1)^2*CD*Af; 
+    t_total(index+1)= t_total(index)+dt; 
+    if u(index+1) <= 0 
+        break;
+    end
+end
 
 for index = index:100000000
     total_mass(index)= total_mass(index-1);
