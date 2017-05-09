@@ -73,7 +73,7 @@ g                   = linspace(0,0,burn_length);            % [m/s^2]
 g(1)                = 9.81;                                 % [m/s]
 rho                 = linspace(0,0,burn_length);            % [kg/m^3]
 rho(1)              = 1.225;                                % [kg/m^3]
-CD                  = 0.0;                                  % Initial Estimate from Stine
+CD                  = 0.8;                                  % Initial Estimate from Stine
 D                   = linspace(0,0,burn_length);            % [N]
 D(1)                = 0.5*rho(1)*u(1)^2*CD*Af;              % [N]
 dt_avg              = 0; 
@@ -111,7 +111,7 @@ for index = burn_length:10000000
 end 
 
 total_mass(index)   = total_mass(index-1) - mass_diff; 
-CD                  = 0;                                       % Will be determined from drop tests with parachute. 
+CD                  = 2.0;                                       % Will be determined from drop tests with parachute. 
 Af                  = pi*(18*in_m/2)^2;                        % [m^2]r
 D(index)            = 0.5*rho(index)*u(index)^2*CD*Af; 
 
