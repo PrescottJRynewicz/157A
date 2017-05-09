@@ -6,68 +6,76 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 close all; clear all; clc;
 
-%% Input Parameters
-
-Mass                = 0.500;                                % [kg]
-
+%% Constants
+Oz_kg               = 0.0283;                               % [kg/oz]
+in_m                = 0.0254;                               % [m/in]
 g                   = 9.81;                                 % [m/s]
 Re                  = 3.67e6;                               % []
-Thrust_curve        = dlmread('Thrust_curve.pol'); 
+
+%% Total Vehicle Input Parameters
+total_mass          = 0.7;                                  % [kg]
+CD_coast_recovery   = [0.75 1.5];                           % [ ]
+original_D          = 1.33*in_m;                            % [m]
+recovery_D          = 18*in_m;                              % [m]
+launch_angle        = 5;                                    % [deg]
+
+%% Motor Inputs 
+prop_mass           = 37.9/1000;                            % [kg]
+total_mass_motor    = 83.9/1000;                            % [kg]
+final_motor_mass    = 38.4/1000;                            % [kg]
+total_impulse       = 76.83;                                % [N-s]
+deploy_time         = 6.05; 
+Thrust_curve        = dlmread('Thrust_curve.pol');          % [N]
+
+%% Interpolate Thrust curve for high accuracy in numerical integration. 
 t_simple            = Thrust_curve(:,1);                    % [t]
-t_total             = [];
-T_simple            = Thrust_curve(:,2);                    %[N]
-T_total             = [];
-
-
-% This Loop lionearly expands the simple data points given in the G40-7 Thrust
-% Profile found at http://www.thrustcurve.org/simfilesearch.jsp?id=1969 in
-% order to create a better approximation of the thrust profile. ie More
-% Data Points
-
+t_total             = [];                                   % [t]    
+T_simple            = Thrust_curve(:,2);                    % [N]
+T_total             = [];                                   % [N]
 for i = 1:length(t_simple)-1
     expanded_array_t    = linspace(t_simple(i),t_simple(i+1),100);
     expanded_array_T    = linspace(T_simple(i),T_simple(i+1),100);
     t_total             = cat(2,t_total,expanded_array_t);
     T_total             = cat(2,T_total,expanded_array_T);
 end
-                                  % [deg]
-prop_mass_init      = 53.8/1000;                            % [kg]
-total_mass_motor    = 123/1000;                             % [kg]
-struct_mass_motor   = total_mass_motor - prop_mass_init;    % [kg]
-Isp                 = 184;                                  % [sec]
-m_dot               = T_total./g./Isp;                      % potential correction factor of -.0004;
-                                                            % this wouls be to make
-                                                            % prop_mass_profile equal zero at
-                                                            % end of burn.
-prop_mass_profile   = [prop_mass_init];                     % [kg]
-total_mass          = linspace(Mass,Mass,length(t_total));
 
-for index = 2:length(T_total)
-    prop_mass_profile(index)    = prop_mass_profile(index-1) - m_dot(index)*(t_total(index)-t_total(index-1));
-    total_mass(index)           = total_mass(index-1) - m_dot(index)*(t_total(index)-t_total(index-1));
-end
-
-% We now have Thrust, time, and mass profiles for burn time of flight. Now
-% we need to calculate initial gravity, density and Drag values to begin
-% loop iterations for Burn Calcs.
-
+%% Vehicle Calcs
+final_mass          = total_mass-total_mass_motor ...       % [ ] 
+                      + final_motor_mass;                   % [kg]
+Isp                 = total_impulse/(prop_mass*g);          % [sec]
+m_dot               = T_total./g./Isp;                      % [kg/s]
+prop_mass_profile   = linspace(0,0,length(t_total));        % [kg]
+prop_mass_profile(1)=prop_mass;                             % [kg]
+total_mass          = linspace(total_mass,total_mass,...    % [kg]
+                      length(t_total));                     % [kg]
+                  
+%% Setup variables for all numerical calcs. 
 
 burn_length         = length(t_total);                      % [vec_length]
-a                   = linspace(0,0,burn_length);
-u                   = linspace(0,0,burn_length);
-h                   = linspace(0,0,burn_length);
-Af                  = pi*(.0580/2)^2;                       % [m^s]
-theta               = deg2rad(5);                           % [rad]
+a                   = linspace(0,0,burn_length);            % [m/s^2]
+u                   = linspace(0,0,burn_length);            % [m/s]
+h                   = linspace(0,0,burn_length);            % [m]
+Af                  = pi*(original_D/2)^2;                  % [m^s]
+theta               = deg2rad(launch_angle);                % [rad]
 ge                  = 9.81;                                 % [m/s]
 h                   = linspace(0,0,burn_length);            % [m]
 g                   = linspace(0,0,burn_length);            % [m/s^2]
 g(1)                = 9.81;                                 % [m/s]
 rho                 = linspace(0,0,burn_length);            % [kg/m^3]
 rho(1)              = 1.225;                                % [kg/m^3]
-CD                  = 0.75;                                 % Initial Estimate from Stine
+CD                  = 0.8;                                  % Initial Estimate from Stine
 D                   = linspace(0,0,burn_length);            % [N]
 D(1)                = 0.5*rho(1)*u(1)^2*CD*Af;              % [N]
 dt_avg              = 0; 
+
+
+for index = 2:length(T_total)
+    prop_mass_profile(index)    = prop_mass_profile(index-1) - m_dot(index)*(t_total(index)-t_total(index-1));
+    total_mass(index)           = total_mass(index-1) - m_dot(index)*(t_total(index)-t_total(index-1));
+end
+
+
+
 
 for index = 1:(burn_length-1)
     dt              = (t_total(index+1)-t_total(index));
@@ -79,10 +87,6 @@ for index = 1:(burn_length-1)
     g(index+1)      = ge*(Re/(Re+h(index+1)));
     rho(index+1)    = real(1.2*exp(-2.9*10^-5*h(index+1)^1.15));
     D(index+1)      = 0.5*rho(index+1)*u(index+1)^2*CD*Af; 
-    
-    if (h(index+1) > 5 && h(index+1) < 5.1)
-        disp(u(index+1))
-    end
     
 
 end
@@ -99,16 +103,16 @@ for index = burn_length:10000000
     rho(index+1)    = real(1.2*exp(-2.9*10^-5*h(index+1)^1.15));
     D(index+1)      = 0.5*rho(index+1)*u(index+1)^2*CD*Af; 
     t_total(index+1)= t_total(index)+dt; 
-    if u(index+1) < 0 || t_total(index) >= 6.05
+    if t_total(index) >= deploy_time
         index = index+1; 
         break;
     end
 end 
 
-CD                  = 1.50;                                  % Will be determined from drop tests with parachute. 
-Af                  = pi*(0.50/2)^2;                        % [m^2]r
+total_mass(index)   = final_mass; 
+CD                  = 2.0;                                       % Will be determined from drop tests with parachute. 
+Af                  = pi*(recovery_D/2)^2;                              % [m^2]r
 D(index)            = 0.5*rho(index)*u(index)^2*CD*Af; 
-
 
 for index = index:100000000
     total_mass(index)= total_mass(index-1);
@@ -142,6 +146,6 @@ end
 
 figure; plot(t_total,u);    title('Velocity vs. Time', 'Fontsize', 16); xlabel('Time [s]'); ylabel('Velocity [m/s]'); 
 figure; plot(t_total,h);    title('Altitude vs. Time', 'Fontsize', 16); xlabel('Time [s]'); ylabel('Altitude [m]');
-figure; plot(t_total,D);    title('Drag vs. Time', 'Fontsize', 16);     xlabel('Time [s]'); ylabel('Drag [N]');
-figure; plot(t_total,g);    title('Gravity vs. Time', 'Fontsize', 16);  xlabel('Time [s]'); ylabel('Gravity [m/s]');
-figure; plot(t_total,rho);  title('Density vs. Time', 'Fontsize', 16);  xlabel('Time [s]'); ylabel('Density [kg/m^3]');
+% figure; plot(t_total,D);    title('Drag vs. Time', 'Fontsize', 16);     xlabel('Time [s]'); ylabel('Drag [N]');
+% figure; plot(t_total,g);    title('Gravity vs. Time', 'Fontsize', 16);  xlabel('Time [s]'); ylabel('Gravity [m/s]');
+% figure; plot(t_total,rho);  title('Density vs. Time', 'Fontsize', 16);  xlabel('Time [s]'); ylabel('Density [kg/m^3]');
